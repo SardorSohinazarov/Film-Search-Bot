@@ -6,7 +6,7 @@ namespace FilmSearchBot
     {
         public static async Task<ListOfSearch> GetFilmListAsync(string name, int pageNumber = 1)
         {
-            if (pageNumber < 1)
+            if (pageNumber <= 1)
                 pageNumber = 1;
 
             HttpClient client = new HttpClient();
@@ -15,6 +15,10 @@ namespace FilmSearchBot
             var root = JsonConvert.DeserializeObject<ListOfSearch>(json);
 
             root.PageNumber = pageNumber;
+
+            if (pageNumber <= 1)
+                root.PageNumber = 1;
+
             root.SearchKey = name;
 
             return root;

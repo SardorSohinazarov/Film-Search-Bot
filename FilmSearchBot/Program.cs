@@ -39,6 +39,7 @@ public class Program
             {
                 UpdateType.Message => HandleMessageAsync(botClient, update, cancellationToken),
                 UpdateType.CallbackQuery => HandleCallBackQueryAsync(botClient, update, cancellationToken),
+                _ => HandeUnknownUpdateType(botClient, update, cancellationToken)
                 //Yana update larni davom ettirib tutishingiz mumkin
             };
 
@@ -46,9 +47,13 @@ public class Program
             {
                 await handler;
             }
+            catch (HandleUnknownException ex)
+            {
+                await Console.Out.WriteLineAsync($"HandleUnknownException:{ex.Message}");
+            }
             catch (Exception ex)
             {
-                await Console.Out.WriteLineAsync($"Xato:{ex.Message}");
+                await Console.Out.WriteLineAsync($"Exception:{ex.Message}");
             }
         }
 
@@ -66,6 +71,11 @@ public class Program
         }
     }
 
+    private static async Task HandeUnknownUpdateType(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
+    {
+        throw new HandleUnknownException("Unknown update type");
+    }
+
     private static async Task HandleCallBackQueryAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
     {
         if (update.CallbackQuery is not { } callBack)
@@ -73,20 +83,94 @@ public class Program
 
         if (callBack.Data.StartsWith("page="))
         {
-
+            await EditFilmListAsync(botClient, callBack, cancellationToken); 
         }
+
         else if (callBack.Data.StartsWith("delete="))
         {
             await botClient.DeleteMessageAsync(
-                chatId:callBack.From.Id,
-                messageId:callBack.Message.MessageId,
-                cancellationToken:cancellationToken);
+                chatId: callBack.From.Id,
+                messageId: callBack.Message.MessageId,
+                cancellationToken: cancellationToken);
         }
         else
         {
             var film = await ApiBroker.GetFilmAsync(callBack.Data);
             await SendFilmAsync(film, botClient, callBack, cancellationToken);
         }
+    }
+
+    private static async Task EditFilmListAsync(ITelegramBotClient botClient, CallbackQuery callBack, CancellationToken cancellationToken)
+    {
+        var listofKeys = callBack.Data[5..].Split(' ');
+        var oldPageNumber = int.Parse(listofKeys[0]);
+        var searchKey = listofKeys[1];
+
+        var root = await ApiBroker.GetFilmListAsync(searchKey, oldPageNumber);
+        var listOfSearch = root.Search;
+        if (listOfSearch == null)
+            return;
+
+        var page = root.PageNumber;
+
+        int count = 0;
+        var listOfInlineKeyboardButton = new List<List<InlineKeyboardButton>>();
+        var inlineKeyBoardButtonsRow = new List<InlineKeyboardButton>();
+
+
+        //agar 5dan kichik bo'lsa bir qator
+        if (listOfSearch.Count <= 5)
+        {
+            inlineKeyBoardButtonsRow = new List<InlineKeyboardButton>();
+            for (int j = 1; j <= listOfSearch.Count; j++)
+            {
+                inlineKeyBoardButtonsRow.Add(InlineKeyboardButton.WithCallbackData($"{count + 1}", $"{listOfSearch[count].imdbID}"));
+                count++;
+            }
+            listOfInlineKeyboardButton.Add(inlineKeyBoardButtonsRow);
+        }
+        else//agar 5dan katta bo'lsa 2 qator
+        {
+            inlineKeyBoardButtonsRow = new List<InlineKeyboardButton>();
+            for (int j = 1; j <= 5; j++)
+            {
+                inlineKeyBoardButtonsRow.Add(InlineKeyboardButton.WithCallbackData($"{count + 1}", $"{listOfSearch[count].imdbID}"));
+                count++;
+            }
+            listOfInlineKeyboardButton.Add(inlineKeyBoardButtonsRow);
+
+            inlineKeyBoardButtonsRow = new List<InlineKeyboardButton>();
+            for (int j = 1; j <= listOfSearch.Count - 5; j++)
+            {
+                inlineKeyBoardButtonsRow.Add(InlineKeyboardButton.WithCallbackData($"{count + 1}", $"{listOfSearch[count].imdbID}"));
+                count++;
+            }
+            listOfInlineKeyboardButton.Add(inlineKeyBoardButtonsRow);
+        }
+
+        //pagination uchun yana bir qator 
+        //shu yerga paginationni oxirgi pagemi yo'qmi biladigan code yozish kerak 
+        listOfInlineKeyboardButton.Add(new List<InlineKeyboardButton>()
+        {
+            InlineKeyboardButton.WithCallbackData($"⬅️", $"page={page-1} {searchKey}"),
+            InlineKeyboardButton.WithCallbackData($"➡️", $"page={page+1} {searchKey}"),
+        });
+
+        var inlineKeyboard = new InlineKeyboardMarkup(listOfInlineKeyboardButton);
+
+        var TitleOfFilms = $"<b>Films page:{page} <i>(search:{searchKey} total result:{root.totalResults})</i>:</b>";
+        for (int i = 0; i < listOfSearch.Count; i++)
+        {
+            TitleOfFilms += $"\n{i + 1}.<i>{listOfSearch[i].Title}-{listOfSearch[i].Year}</i>";
+        }
+
+        await botClient.EditMessageTextAsync(
+            chatId: callBack.From.Id,
+            text:TitleOfFilms,
+            messageId: callBack.Message.MessageId,
+            parseMode: ParseMode.Html,
+            replyMarkup: inlineKeyboard,
+            cancellationToken: cancellationToken);
     }
 
     public static async Task SendFilmAsync(Film film, ITelegramBotClient botClient, CallbackQuery callback, CancellationToken cancellationToken)
@@ -160,7 +244,16 @@ public class Program
         var root = await ApiBroker.GetFilmListAsync(messageText);
         var listOfSearch = root.Search;
         if (listOfSearch == null)
+        {
+            await botClient.SendTextMessageAsync(
+                chatId: update.Message.Chat.Id,
+                text: "Bu nomli kino topilmadi uzur",
+                replyToMessageId:update.Message.MessageId,
+                cancellationToken:cancellationToken
+                );
+
             return;
+        }
 
         var page = root.PageNumber;
         var searchKey = root.SearchKey;
