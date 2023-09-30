@@ -1,4 +1,4 @@
-﻿namespace FilmSearchBot
+﻿namespace FilmSearchBot.Exceptions
 {
     public class HandleUnknownException : Exception
     {
