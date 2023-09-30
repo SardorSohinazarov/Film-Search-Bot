@@ -39,6 +39,7 @@ public class Program
             {
                 UpdateType.Message => HandleMessageAsync(botClient, update, cancellationToken),
                 UpdateType.CallbackQuery => HandleCallBackQueryAsync(botClient, update, cancellationToken),
+                _ => HandeUnknownUpdateType(botClient, update, cancellationToken)
                 //Yana update larni davom ettirib tutishingiz mumkin
             };
 
@@ -46,9 +47,13 @@ public class Program
             {
                 await handler;
             }
+            catch (HandleUnknownException ex)
+            {
+                await Console.Out.WriteLineAsync($"HandleUnknownException:{ex.Message}");
+            }
             catch (Exception ex)
             {
-                await Console.Out.WriteLineAsync($"Xato:{ex.Message}");
+                await Console.Out.WriteLineAsync($"Exception:{ex.Message}");
             }
         }
 
@@ -64,6 +69,11 @@ public class Program
             Console.WriteLine(ErrorMessage);
             return Task.CompletedTask;
         }
+    }
+
+    private static async Task HandeUnknownUpdateType(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
+    {
+        throw new HandleUnknownException("Unknown update type");
     }
 
     private static async Task HandleCallBackQueryAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
@@ -95,11 +105,7 @@ public class Program
         var listofKeys = callBack.Data[5..].Split(' ');
         var oldPageNumber = int.Parse(listofKeys[0]);
         var searchKey = listofKeys[1];
-/*
-        if(oldPageNumber == 1)
-        {
-            await botClient.
-        }*/
+
         var root = await ApiBroker.GetFilmListAsync(searchKey, oldPageNumber);
         var listOfSearch = root.Search;
         if (listOfSearch == null)
@@ -238,7 +244,16 @@ public class Program
         var root = await ApiBroker.GetFilmListAsync(messageText);
         var listOfSearch = root.Search;
         if (listOfSearch == null)
+        {
+            await botClient.SendTextMessageAsync(
+                chatId: update.Message.Chat.Id,
+                text: "Bu nomli kino topilmadi uzur",
+                replyToMessageId:update.Message.MessageId,
+                cancellationToken:cancellationToken
+                );
+
             return;
+        }
 
         var page = root.PageNumber;
         var searchKey = root.SearchKey;
