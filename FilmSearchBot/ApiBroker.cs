@@ -2,9 +2,9 @@
 
 namespace FilmSearchBot
 {
-    public class Broker
+    public class ApiBroker
     {
-        public static async Task<ListOfSearch> GetFilmList(string name, int pageNumber = 1)
+        public static async Task<ListOfSearch> GetFilmListAsync(string name, int pageNumber = 1)
         {
             if (pageNumber < 1)
                 pageNumber = 1;
@@ -20,7 +20,7 @@ namespace FilmSearchBot
             return root;
         }
 
-        public static async Task<Film> GetFilm(string imdbID)
+        public static async Task<Film> GetFilmAsync(string imdbID)
         {
             HttpClient client = new HttpClient();
             client.BaseAddress = new Uri("https://www.omdbapi.com/");

@@ -68,7 +68,77 @@ public class Program
 
     private static async Task HandleCallBackQueryAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        if (update.CallbackQuery is not { } callBack)
+            return;
+
+        if (callBack.Data.StartsWith("page="))
+        {
+
+        }
+        else if (callBack.Data.StartsWith("delete="))
+        {
+            await botClient.DeleteMessageAsync(
+                chatId:callBack.From.Id,
+                messageId:callBack.Message.MessageId,
+                cancellationToken:cancellationToken);
+        }
+        else
+        {
+            var film = await ApiBroker.GetFilmAsync(callBack.Data);
+            await SendFilmAsync(film, botClient, callBack, cancellationToken);
+        }
+    }
+
+    public static async Task SendFilmAsync(Film film, ITelegramBotClient botClient, CallbackQuery callback, CancellationToken cancellationToken)
+    {
+        InlineKeyboardMarkup inlineKeyboard = new(new[]
+        {
+            // first row
+            new []
+            {
+                InlineKeyboardButton.WithCallbackData(text: "❌", callbackData: $"delete={callback.Message.MessageId}")
+            }
+        });
+
+        if (film.Poster == null || film.Poster == "N/A")
+        {
+            await botClient.SendTextMessageAsync(
+                chatId: callback.From.Id,
+                text: $"Title:<i>{film.Title}</i>\n" +
+                $"Year:<i>{film.Year}</i>\n" +
+                $"Released<i>:{film.Released}</i>\n" +
+                $"Duration:<i>{film.Runtime}</i>\n" +
+                $"Genre:<i>{film.Genre}</i>\n" +
+                $"Actors:<i>{film.Actors}</i>\n" +
+                $"Director:<i>{film.Director}</i>\n" +
+                $"Description:<i>{film.Plot}</i>\n" +
+                $"Country:<i>{film.Country}</i>\n" +
+                $"Awards:<i>{film.Awards}</i>\n",
+                replyMarkup: inlineKeyboard,
+                parseMode: ParseMode.Html,
+                cancellationToken: cancellationToken
+                );
+        }
+        else
+        {
+            await botClient.SendPhotoAsync(
+                chatId: callback.From.Id,
+                photo: InputFile.FromUri(film.Poster),
+                caption: $"Title:<i>{film.Title}</i>\n" +
+                $"Year:<i>{film.Year}</i>\n" +
+                $"Released<i>:{film.Released}</i>\n" +
+                $"Duration:<i>{film.Runtime}</i>\n" +
+                $"Genre:<i>{film.Genre}</i>\n" +
+                $"Actors:<i>{film.Actors}</i>\n" +
+                $"Director:<i>{film.Director}</i>\n" +
+                $"Description:<i>{film.Plot}</i>\n" +
+                $"Country:<i>{film.Country}</i>\n" +
+                $"Awards:<i>{film.Awards}</i>\n",
+                replyMarkup: inlineKeyboard,
+                parseMode: ParseMode.Html,
+                cancellationToken: cancellationToken
+                );
+        }
     }
 
     private static async Task HandleMessageAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
@@ -80,14 +150,14 @@ public class Program
 
         Console.WriteLine($"Received a '{messageText}' message in chat {update.Message.Chat.Id}.");
 
-        var root = await Broker.GetFilmList(messageText);
+        var root = await ApiBroker.GetFilmListAsync(messageText);
 
         await SendFilmListAsync(messageText,botClient, update, cancellationToken);
     }
 
-    private static async Task SendFilmListAsync(string messageText,ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
+    public static async Task SendFilmListAsync(string messageText,ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
     {
-        var root = await Broker.GetFilmList(messageText);
+        var root = await ApiBroker.GetFilmListAsync(messageText);
         var listOfSearch = root.Search;
         if (listOfSearch == null)
             return;
